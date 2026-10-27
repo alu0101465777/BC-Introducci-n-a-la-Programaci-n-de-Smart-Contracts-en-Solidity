@@ -42,11 +42,11 @@ La cuenta seleccionada en Account realiza la transacción. Escribir una direcci�
 
 | Prueba | Operación y resultado observado | Evidencia |
 | --- | --- | --- |
-| Registro de B | Se registra Comprador desde Account 2; inicialmente tiene 0 tokens. | [Captura](capturas/01-registro-comprador.png) |
-| Compra correcta | B compra 2 tokens por 10 ETH. La transacción se completa y su saldo pasa a 2 tokens. | [Captura](capturas/02-compra-correcta.png) |
-| Pago insuficiente | B intenta comprar 2 tokens pagando 5 ETH. Se muestra «La cantidad de Ether enviada es insuficiente» y conserva 2 tokens. | [Captura](capturas/03-pago-insuficiente.png) |
-| Inventario insuficiente | Se intenta comprar 101 tokens con Value igual a 0. Se muestra «El propietario no tiene suficientes tokens». | [Captura](capturas/04-tokens-insuficientes.png) |
-| Saldo del contrato | La consulta devuelve 40000000000000000000 wei, equivalentes a 40 ETH. | [Captura](capturas/05-saldo-contrato.png) |
+| Registro de B | Se registra Comprador desde Account 2; inicialmente tiene 0 tokens. | [Captura](Capturas/01-registro-comprador.png) |
+| Compra correcta | B compra 2 tokens por 10 ETH. La transacción se completa y su saldo pasa a 2 tokens. | [Captura](Capturas/02-compra-correcta.png) |
+| Pago insuficiente | B intenta comprar 2 tokens pagando 5 ETH. Se muestra «La cantidad de Ether enviada es insuficiente» y conserva 2 tokens. | [Captura](Capturas/03-pago-insuficiente.png) |
+| Inventario insuficiente | Se intenta comprar 101 tokens con Value igual a 0. Se muestra «El propietario no tiene suficientes tokens». | [Captura](Capturas/04-tokens-insuficientes.png) |
+| Saldo del contrato | La consulta devuelve 40000000000000000000 wei, equivalentes a 40 ETH. | [Captura](Capturas/05-saldo-contrato.png) |
 
 El saldo final de 40 ETH corresponde a todas las compras aceptadas durante la sesión, incluidas las pruebas previas realizadas desde A. No corresponde únicamente a la compra de dos tokens de B. Cuando compra el propio propietario, el descuento y el abono de tokens se aplican a la misma dirección y su saldo de tokens no cambia, aunque el ETH sí entra en el contrato.
 
