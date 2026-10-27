@@ -1,91 +1,131 @@
-# Práctica 1 - Ejercicio 5: Creación de Smart Contract
+# Ejercicio 5: Financiación de un torneo de fútbol
 
-**Autor:** Zayan Santos Díaz
-**Máster:** Máster Interuniversitario en Ciberseguridad (MUniCS) - Universidade de Vigo / Universidade da Coruña
-**Asignatura:** Tecnologías de Registro Distribuido y Blockchain (BC)
+**Autor:** Zayan Santos Díaz  
+**Asignatura:** Tecnologías de Registro Distribuido y Blockchain  
+**Práctica 1:** Introducción a la programación de smart contracts en Solidity
 
-Esta memoria documenta la resolución del Ejercicio 5, detallando el ciclo completo de creación de un contrato inteligente en Solidity, desde su diseño hasta su despliegue y pruebas exhaustivas en Remix IDE.
+## 1. Análisis del escenario
 
----
+El contrato permite recaudar fondos para organizar un torneo de fútbol. El organizador fija una cantidad mínima y un plazo. Los participantes aportan ETH y, al finalizar el plazo, pueden darse dos situaciones:
 
-## (1) Análisis y definición del escenario
+- Si se alcanza el objetivo, el organizador puede retirar los fondos.
+- Si no se alcanza, cada participante puede recuperar su aportación.
 
-El escenario elegido es una plataforma de **Financiación de Torneos (Crowdfunding)**.
-Para organizar un torneo (como puede ser de eSports o cualquier evento deportivo), se requiere recaudar una cantidad específica de fondos (objetivo) dentro de un periodo de tiempo determinado. 
+La blockchain permite mantener el dinero bajo unas reglas públicas y verificables. Los participantes no dependen de que el organizador autorice las devoluciones y este no puede cambiar las condiciones después del despliegue.
 
-Se necesita la funcionalidad proporcionada por una blockchain pública como Ethereum para:
-* **Transparencia:** Todos los patrocinadores/jugadores pueden ver cuánto se ha recaudado, el objetivo final y la fecha límite inmutable.
-* **Automatización sin confianza (Trustless):** Garantizar que si no se alcanza el objetivo en el tiempo estipulado, los usuarios puedan recuperar sus fondos de manera autónoma sin depender de la buena fe del organizador. Y si se alcanza, los fondos se liberen al creador automáticamente.
+El contrato gestiona la financiación, pero no garantiza que el torneo llegue a celebrarse. Las pruebas se realizaron en Remix VM con ETH simulado.
 
----
+## 2. Diseño
 
-## (2) Diseño
+### Usuarios
 
-### Lógica de Negocio
-1. El **Organizador** despliega el contrato inteligente definiendo el objetivo económico y la duración de la campaña de recaudación.
-2. Los **Participantes** envían fondos (ETH/Wei) al contrato mientras el plazo esté activo.
-3. Si se alcanza la fecha límite y el objetivo se ha cumplido, el Organizador puede retirar la totalidad de los fondos recaudados.
-4. Si se alcanza la fecha límite pero **no** se cumple el objetivo, los Participantes pueden reclamar la devolución exacta de lo que aportaron.
+| Usuario | Operaciones |
+| --- | --- |
+| Organizador | Despliega la campaña y retira los fondos si se alcanza la meta después del plazo. También puede aportar. |
+| Participante | Aporta antes del plazo y solicita su devolución si la campaña fracasa. |
+| Cualquier dirección | Puede consultar la información pública del contrato. |
 
-### Contenido del Contrato Inteligente
-* **Datos (Variables de Estado):**
-  * `owner` (address): Dirección del creador/organizador.
-  * `objetivo` (uint256): Meta a recaudar.
-  * `fechaLimite` (uint256): Timestamp de cuándo finaliza la campaña.
-  * `totalRecaudado` (uint256): Acumulador de los fondos aportados.
-  * `fondosRetirados` (bool): Estado de seguridad para evitar dobles retiros por parte del owner.
-  * `aportaciones` (mapping address => uint256): Registro individualizado de las cantidades aportadas por cada participante.
-* **Funciones de Operación:**
-  * `aportar()`: Permite a los usuarios enviar valor payable.
-  * `retirarFondos()`: Transfiere el balance al organizador en caso de éxito.
-  * `reclamarDevolucion()`: Reembolsa al usuario si la campaña fracasó.
-* **Reglas y Restricciones (Modificadores):**
-  * `soloPropietario`: Restringe operaciones sensibles.
-  * Extensivo uso de bloqueos temporales (`block.timestamp < fechaLimite`).
+### Datos del contrato
 
-### Usuarios del Sistema (Casos de Uso)
-* **Organizador (Owner):** Inicia la campaña, verifica el estado y retira fondos si es exitosa.
-* **Participante / Patrocinador:** Envía fondos al contrato, consulta su nivel de aportación y solicita el reembolso si la campaña no cumple la meta.
+| Variable | Función |
+| --- | --- |
+| `organizador` | Dirección que despliega el contrato y puede retirar los fondos si la campaña tiene éxito. |
+| `objetivo` | Cantidad mínima que debe recaudarse, expresada en wei. |
+| `fechaLimite` | Momento en el que termina el plazo de aportaciones. |
+| `totalRecaudado` | Total histórico de las aportaciones válidas. |
+| `aportaciones` | Mapping que guarda la cantidad aportada por cada dirección. |
+| `fondosRetirados` | Indica si el organizador ya ha retirado los fondos. |
 
----
+El organizador, el objetivo y la fecha límite son inmutables.
 
-## (3) Implementación
+### Funciones y reglas de funcionamiento
 
-El código se ha programado en Solidity (versión `>=0.8.30`), aplicando buenas prácticas y técnicas de optimización de gas:
-* **Uso de Eventos:** Se emiten eventos (`AportacionRealizada`, `FondosRetirados`, `DevolucionReclamada`) en las funciones principales para delegar el historial al frontend sin gastar gas almacenando logs en variables de estado.
-* **Tipos de datos:** Dimensionamiento y control de variables correcto, aprovechando las devoluciones de gas del operador `revert()` interno de los statements `require()`.
-* **Seguridad:** Implementación de protecciones básicas contra re-entrancy reseteando los saldos de los usuarios (`aportaciones[msg.sender] = 0;`) antes de efectuar la transferencia de la devolución.
+- **Constructor:** recibe el objetivo en wei y la duración en segundos. Rechaza objetivos y duraciones iguales a cero.
+- **`aportar()`:** permite enviar ETH antes del plazo. La cantidad debe ser positiva. Una misma cuenta puede aportar varias veces y sus aportaciones se acumulan.
+- **`retirarFondos()`:** permite retirar el total recaudado únicamente al organizador, después del plazo y si se alcanza la meta. Solo puede ejecutarse correctamente una vez.
+- **`solicitarDevolucion()`:** permite recuperar la aportación acumulada después del plazo si no se alcanza la meta. No permite cobrar dos veces la misma aportación.
 
-*(Revisar el código fuente en el directorio `contracts/FinanciacionTorneo.sol`)*.
+Se admite superar el objetivo y el exceso también se entrega al organizador. Alcanzar la meta no cierra anticipadamente la campaña.
 
----
+Los pagos no se ejecutan solos al terminar el plazo: el organizador o el participante deben llamar a la función correspondiente.
 
-## (4) Pruebas (Entorno Remix IDE)
+## 3. Implementación
 
-Se ha simulado exhaustivamente la ejecución en el entorno **Remix VM**. A continuación, se explican las pruebas clave realizadas para validar la seguridad y la lógica del contrato.
+El código completo está en [FinanciacionTorneo.sol](contracts/FinanciacionTorneo.sol).
 
-### 4.1 Compilación, Despliegue y Rechazos Iniciales
-Se validó la sintaxis correcta del contrato y la robustez del constructor. No es posible desplegarlo con parámetros inconsistentes, como una meta económica nula:
-* ![Compilación Exitosa](capturas/01-compilacion-remix.jpg)
-* ![Constructor Objetivo Cero Rechazado](capturas/02-constructor-objetivo-cero.jpg)
-* ![Constructor Válido](capturas/17-constructor-objetivo-legible.jpg)
+Se utiliza Solidity **0.8.30**. El contrato incluye funciones `payable`, un mapping de aportaciones, eventos y errores personalizados.
 
-### 4.2 Restricciones de Tiempo en Aportaciones
-Se verificó el correcto funcionamiento del modificador de tiempo para asegurar que los usuarios (patrocinadores) puedan enviar dinero y el contrato bloquee depósitos tardíos:
-* ![Aportaciones Válidas](capturas/14-aportaciones-s-legibles.jpg)
-* ![Registro Exacto del Objetivo](capturas/05-objetivo-exacto-y-limite.jpg)
-* ![Aportación Fuera de Plazo Rechazada](capturas/19-aportacion-fuera-plazo-legible.jpg)
+Los eventos `Aportacion`, `Retirada` y `Devolucion` registran la dirección y la cantidad de cada operación.
 
-### 4.3 Control de Acceso y Lógica de Fracaso (Retirada)
-El retiro de fondos funciona y está protegido para el organizador, pero si la campaña finaliza y no se alcanza el objetivo mínimo, el creador no puede acceder a esos fondos, forzando la política de reembolsos:
-* ![Control de Acceso Funcional](capturas/20-control-acceso-legible.jpg)
-* ![Retirada Denegada por Fracaso](capturas/24-retirada-fracaso-rechazada.jpg)
+Antes de enviar ETH se actualiza el estado del contrato: se marca la retirada o se pone a cero la aportación del usuario. Después se realiza el envío mediante `call`. Si el envío falla, la operación revierte y se conserva el derecho a cobrar. Esto evita repetir el mismo pago mediante reentrada.
 
-### 4.4 Devoluciones a Usuarios
-Cuando la campaña no prospera, los usuarios pueden recuperar exactamente lo invertido. Se comprobó la ejecución del reembolso devolviendo el saldo al participante:
-* ![Devolución Final Exitosa](capturas/11-devolucion-c-final.jpg)
+### Optimización de gas
 
-### 4.5 Inspección de Estados y Trazabilidad
-Se comprobó la trazabilidad final revisando los eventos en cadena (Logs) y los estados finales del mapeo de aportaciones tras finalizar el ciclo de vida del contrato:
-* ![Emisión de Eventos y Timestamps](capturas/12-eventos-y-timestamps.jpg)
-* ![Trazabilidad y Estados Finales](capturas/13-estados-finales-legibles.jpg)
+Se aplican las siguientes decisiones:
+
+- Variables `immutable` para los datos que no cambian después del despliegue.
+- Errores personalizados para indicar los rechazos sin utilizar mensajes largos.
+- Devoluciones individuales, evitando recorrer todos los participantes en una sola transacción.
+- Eventos para registrar el historial sin mantener un array adicional.
+- Optimizador del compilador activado con **200 runs** y destino EVM **Shanghai**.
+
+No se ha realizado una comparación cuantitativa del consumo de gas frente a otras versiones.
+
+## 4. Pruebas en Remix
+
+Las pruebas documentadas se realizaron en **Remix VM Shanghai**, con Solidity **0.8.30** y ETH simulado.
+
+Se utilizaron tres cuentas: A como organizador y B y C como participantes. Se desplegaron tres campañas independientes.
+
+### Aportaciones, retirada y devolución
+
+| Campaña | Aportaciones | Resultado |
+| --- | --- | --- |
+| Objetivo exacto: 1 ETH | B aporta 0,4 + 0,1 ETH y C aporta 0,5 ETH. | A retira 1 ETH después del plazo. |
+| Objetivo superado: 1 ETH | B aporta 1,2 ETH. | A retira los 1,2 ETH completos después del plazo. |
+| Objetivo no alcanzado: 2 ETH | B aporta 0,3 ETH y C aporta 0,4 ETH. | B recupera 0,3 ETH y C recupera 0,4 ETH. |
+
+Las aportaciones repetidas de B y la aportación de C aparecen en los eventos de la primera campaña:
+
+![Aportaciones de la campaña](capturas/14-aportaciones-s-legibles.jpg)
+
+Las retiradas y devoluciones se comprobaron consultando los eventos y sus cantidades:
+
+![Eventos de retirada y devolución](capturas/12-eventos-y-timestamps.jpg)
+
+Al finalizar, las tres campañas tienen saldo cero. Las campañas exitosas muestran `fondosRetirados = true`. En la campaña fallida, las aportaciones pendientes de B y C quedan a cero después de las devoluciones.
+
+`totalRecaudado` conserva el total histórico; no representa el saldo restante del contrato.
+
+![Estados finales de las campañas](capturas/13-estados-finales-legibles.jpg)
+
+### Restricciones
+
+También se comprobaron operaciones que debían rechazarse:
+
+| Operación | Error esperado y observado |
+| --- | --- |
+| Objetivo cero | `ObjetivoInvalido` |
+| Duración cero | `DuracionInvalida` |
+| Aportación de cero ETH | `AportacionNula` |
+| Retirada o devolución antes del plazo | `PlazoNoFinalizado` |
+| Aportación fuera de plazo | `PlazoFinalizado` |
+| Retirada desde otra cuenta | `NoEsOrganizador` |
+| Retirada de una campaña fallida | `ObjetivoNoAlcanzado` |
+| Devolución de una campaña exitosa | `ObjetivoAlcanzado` |
+| Devolución sin aportación pendiente | `SinAportacion` |
+| Segunda retirada | `FondosYaRetirados` |
+
+Por ejemplo, una aportación realizada después del plazo se rechaza con `PlazoFinalizado`:
+
+![Aportación fuera de plazo](capturas/19-aportacion-fuera-plazo-legible.jpg)
+
+Si una cuenta distinta del organizador intenta retirar los fondos, se obtiene `NoEsOrganizador`:
+
+![Control de acceso](capturas/20-control-acceso-legible.jpg)
+
+### Resultado
+
+La sesión documentada contiene **29 transacciones: 14 exitosas y 15 rechazos esperados**. Se comprobaron las aportaciones, las retiradas, las devoluciones y las restricciones de plazo y acceso.
+
+Las transacciones se ejecutaron mediante la interfaz de Remix, manejada con automatización de navegador. Los eventos y estados se consultaron en su terminal.
