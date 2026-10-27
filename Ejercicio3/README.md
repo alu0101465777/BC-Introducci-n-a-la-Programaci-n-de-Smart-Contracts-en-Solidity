@@ -25,7 +25,7 @@ Capturas auténticas en `evidencias/`:
 - `01-faucet-bloqueado.jpg`: rechazo inicial del faucet.
 - `02-sepolia-sin-fondos.jpg`: estado inicial de la cuenta emisora, antes del ingreso.
 - `03-recepcion-005-sepolia-eth.jpg`: ingreso de **0,05 Sepolia ETH**.
-- `04-transferencia-cuentas-propias.jpg`: detalle del envío y estado Success.
+- `04-transferencia-cuentas.jpg`: detalle del envío y estado Success.
 - `05-saldo-cuenta-destinataria.jpg`: saldo recibido y transacción de entrada.
 
 El importe documentado es el registrado en la blockchain. Las confirmaciones indicadas corresponden al momento de la captura.
