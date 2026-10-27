@@ -1,96 +1,106 @@
-# Financiación de un torneo de fútbol
+# Práctica 1 - Ejercicio 5: Creación de Smart Contract
 
-Práctica universitaria, ejercicio 5, trabajo de dos personas. El PDF se utiliza como enunciado académico; las reglas concretas implementadas son las solicitadas en este proyecto. No se han realizado publicaciones, envíos ni despliegues en redes públicas.
+**Autor:** Zayan Santos Díaz
+**Máster:** Máster Interuniversitario en Ciberseguridad (MUniCS) - Universidade de Vigo / Universidade da Coruña
+**Asignatura:** Tecnologías de Registro Distribuido y Blockchain (BC)
 
-Autor: **Zayan Santos Díaz**
+Esta memoria documenta la resolución del Ejercicio 5, detallando el ciclo completo de creación de un contrato inteligente en Solidity, desde su diseño hasta su despliegue y pruebas exhaustivas en Remix IDE.
 
-Estado: contrato y tests conservados. Los escenarios funcionales S, X y F se han ejecutado mediante la interfaz de Remix VM Shanghai. Véase el [registro real de Remix](REGISTRO_REMIX.md), con cuentas, instancias, bloques y resultados. El segundo exacto del límite se validó en Ganache, no manualmente en Remix.
+---
 
-## Escenario y justificación
+## (1) Análisis y definición del escenario
 
-Un organizador necesita financiar un torneo. Al desplegar fija un objetivo en wei y un plazo en segundos. Los participantes depositan ETH; si se logra la meta, el organizador cobra después del plazo; si se fracasa, cada participante recupera su aportación.
+El escenario elegido es una plataforma de **Financiación de Torneos (Crowdfunding)**.
+Para organizar un torneo (como puede ser de eSports o cualquier evento deportivo), se requiere recaudar una cantidad específica de fondos (objetivo) dentro de un periodo de tiempo determinado. 
 
-Una blockchain pública permite compartir un depósito verificable entre personas que no necesitan confiar la custodia a un administrador. Las reglas, las aportaciones y los eventos son comprobables. Esto tiene costes de gas, exposición pública y dependencia de las claves. Para un grupo que ya confía en su organizador, una cuenta bancaria y una base de datos pueden resultar más sencillas. El contrato no acredita que el torneo se celebre ni controla cómo se gastan los fondos retirados.
+Se necesita la funcionalidad proporcionada por una blockchain pública como Ethereum para:
+* **Transparencia:** Todos los patrocinadores/jugadores pueden ver cuánto se ha recaudado, el objetivo final y la fecha límite inmutable.
+* **Automatización sin confianza (Trustless):** Garantizar que si no se alcanza el objetivo en el tiempo estipulado, los usuarios puedan recuperar sus fondos de manera autónoma sin depender de la buena fe del organizador. Y si se alcanza, los fondos se liberen al creador automáticamente.
 
-## Archivos y ejecución
+---
 
-- `contracts/FinanciacionTorneo.sol`: contrato independiente, sin bibliotecas externas.
-- `scripts/compile.cjs`: compilación y artefacto con ABI y bytecode.
-- `test/torneo.test.cjs`: pruebas locales y contrato receptor auxiliar incluido como fuente de prueba.
-- `CASOS_DE_USO.md`: diagrama y actores.
-- `PRUEBAS_REMIX.md`: guion para reproducir las pruebas manuales.
-- `RESULTADOS_PRUEBAS.md`: resultados realmente ejecutados.
-- `CAPTURAS_PENDIENTES.md`: índice de capturas reales disponibles y límites de la evidencia visual.
-- `REGISTRO_REMIX.md`: sesión real de pruebas con parámetros y resultados.
-- `evidencias/`: recibos, eventos y estados finales consultados en Remix VM.
-- `scripts/preparar_entrega.py`: prepara y comprueba la carpeta y el ZIP de entrega.
-- `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.gitignore`: entorno reproducible y exclusiones. Las builds nativas opcionales se desactivan explícitamente.
+## (2) Diseño
 
-Requiere Node.js (se ha probado con 24.22.1) y pnpm (11.25.0). Desde esta carpeta:
+### Lógica de Negocio
+1. El **Organizador** despliega el contrato inteligente definiendo el objetivo económico y la duración de la campaña de recaudación.
+2. Los **Participantes** envían fondos (ETH/Wei) al contrato mientras el plazo esté activo.
+3. Si se alcanza la fecha límite y el objetivo se ha cumplido, el Organizador puede retirar la totalidad de los fondos recaudados.
+4. Si se alcanza la fecha límite pero **no** se cumple el objetivo, los Participantes pueden reclamar la devolución exacta de lo que aportaron.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm run compile
-pnpm test
-```
+### Contenido del Contrato Inteligente
+* **Datos (Variables de Estado):**
+  * `owner` (address): Dirección del creador/organizador.
+  * `objetivo` (uint256): Meta a recaudar.
+  * `fechaLimite` (uint256): Timestamp de cuándo finaliza la campaña.
+  * `totalRecaudado` (uint256): Acumulador de los fondos aportados.
+  * `fondosRetirados` (bool): Estado de seguridad para evitar dobles retiros por parte del owner.
+  * `aportaciones` (mapping address => uint256): Registro individualizado de las cantidades aportadas por cada participante.
+* **Funciones de Operación:**
+  * `aportar()`: Permite a los usuarios enviar valor payable.
+  * `retirarFondos()`: Transfiere el balance al organizador en caso de éxito.
+  * `reclamarDevolucion()`: Reembolsa al usuario si la campaña fracasó.
+* **Reglas y Restricciones (Modificadores):**
+  * `soloPropietario`: Restringe operaciones sensibles.
+  * Extensivo uso de bloqueos temporales (`block.timestamp < fechaLimite`).
 
-También se puede ejecutar `node scripts/compile.cjs` y `node --test --test-concurrency=1 test/torneo.test.cjs` una vez instaladas las dependencias. No hace falta arrancar un servidor ni configurar claves: cada prueba crea una blockchain Ganache independiente, con cuentas ficticias, y la cierra al acabar. Compilador fijado a 0.8.30, optimizador activado con 200 ejecuciones, EVM Shanghai. `artifacts/` se regenera al compilar. El lockfile fija las dependencias transitivas.
+### Usuarios del Sistema (Casos de Uso)
+* **Organizador (Owner):** Inicia la campaña, verifica el estado y retira fondos si es exitosa.
+* **Participante / Patrocinador:** Envía fondos al contrato, consulta su nivel de aportación y solicita el reembolso si la campaña no cumple la meta.
 
-## Usuarios, datos y funciones
+*(Para diagramas adicionales, consultar el archivo `CASOS_DE_USO.md` adjunto en el proyecto).*
 
-| Dato público | Significado |
-| --- | --- |
-| `organizador` | Cuenta que despliega; dirección payable immutable |
-| `objetivo` | Meta positiva, en wei; immutable |
-| `fechaLimite` | Timestamp de despliegue + duración; immutable |
-| `totalRecaudado` | Suma histórica de aportaciones válidas |
-| `aportaciones(direccion)` | Acumulado por dirección; pasa a cero al devolver |
-| `fondosRetirados` | Impide cobrar dos veces la campaña exitosa |
+---
 
-| Función | Actor, condiciones y efectos |
-| --- | --- |
-| Constructor(meta, duración) | Organizador; ambos positivos y fecha representable |
-| `aportar()` payable | Cualquier dirección, también organizador; valor > 0 y timestamp < límite; acumula y emite `Aportacion` |
-| `retirarFondos()` | Solo organizador; timestamp >= límite, total >= meta y no retirado; cobra todo el total, incluido exceso; emite `Retirada` |
-| `solicitarDevolucion()` | Cada aportante; timestamp >= límite, total < meta y saldo propio > 0; devuelve acumulado y emite `Devolucion` |
-| Getters automáticos | Cualquiera puede consultar datos, sin transacción |
+## (3) Implementación
 
-Cada evento lleva la dirección indexada y la cantidad en wei. Los errores personalizados permiten reconocer el motivo de un rechazo sin cadenas largas.
+El código se ha programado en Solidity (versión `>=0.8.30`), aplicando buenas prácticas y técnicas de optimización de gas:
+* **Uso de Eventos:** Se emiten eventos (`AportacionRealizada`, `FondosRetirados`, `DevolucionReclamada`) en las funciones principales para delegar el historial al frontend sin gastar gas almacenando logs en variables de estado.
+* **Tipos de datos:** Dimensionamiento y control de variables correcto, aprovechando las devoluciones de gas del operador `revert()` interno de los statements `require()`.
+* **Seguridad:** Implementación de protecciones básicas contra re-entrancy reseteando los saldos de los usuarios (`aportaciones[msg.sender] = 0;`) antes de efectuar la transferencia de la devolución.
 
-## Reglas y seguridad
+*(Revisar el código fuente en el directorio `contracts/FinanciacionTorneo.sol`)*.
 
-1. El despliegue fija la identidad del organizador, la meta y el final; no existen setters.
-2. Las aportaciones positivas pueden repetirse y superar la meta; alcanzar la meta no cierra anticipadamente la campaña.
-3. En el segundo exacto del límite ya no se puede aportar y ya se puede liquidar. Se utiliza el timestamp del bloque de inclusión, no la hora de pulsar un botón.
-4. El éxito depende de `totalRecaudado >= objetivo`; no del saldo actual del contrato. El total histórico no disminuye con las devoluciones, evitando alterar la clasificación de la campaña.
-5. La retirada marca primero `fondosRetirados=true`; la devolución pone primero a cero el saldo individual. Después se usa `call` y se comprueba su booleano. Si el receptor rechaza ETH, `EnvioFallido` revierte toda la operación y conserva el derecho a reintentar.
-6. La reentrada no puede repetir el cobro porque los efectos ya están aplicados. Las ramas de éxito y fracaso son excluyentes. No se añade un cerrojo de reentrada para mantener el ejemplo sencillo; cambiar estas funciones exige revisar esa propiedad.
-7. No hay pagos automáticos, bucles de participantes, recepción genérica de ETH, cancelaciones ni comisiones. Un envío directo sin llamar a `aportar()` revierte normalmente.
+---
 
-El patrón de comprobaciones, efectos e interacciones y la evitación de bucles se apoyan en la [documentación de seguridad de Solidity 0.8.30](https://docs.soliditylang.org/en/v0.8.30/security-considerations.html).
+## (4) Pruebas (Entorno Remix IDE)
 
-## Gas y límites de las optimizaciones
+Se ha simulado exhaustivamente la ejecución en el entorno **Remix VM**. A continuación, se explican las pruebas realizadas, enlazando directamente con las capturas de pantalla obtenidas.
 
-- `immutable` introduce los tres valores fijos en el código desplegado y evita leerlos de almacenamiento mutable. Puede aumentar el bytecode; no significa coste cero.
-- Errores personalizados evitan incluir mensajes largos y reducen datos de revert respecto a cadenas. Una transacción revertida sigue consumiendo gas.
-- El mapping evita mantener y recorrer un array de participantes. Cada devolución tiene trabajo O(1), independiente del número de aportantes; cada participante paga su transacción.
-- Se guarda la cantidad a devolver en una variable local antes de borrar el mapping. No se añade almacenamiento para enumerar usuarios: los eventos sirven para consultar el historial fuera del contrato.
-- Optimizador con 200 ejecuciones: equilibrio de coste de despliegue y ejecución, sin afirmar que sea óptimo para cualquier uso. No se ha realizado una comparativa de gas con variantes.
-- Se conservan las comprobaciones aritméticas de Solidity; no se usa `unchecked` ni tipos pequeños por una supuesta reducción automática de gas.
-- Los eventos cuestan gas; no sustituyen el estado que el contrato necesita para decidir pagos. Las llamadas externas y las primeras escrituras del mapping siguen teniendo coste.
+### 4.1 Configuración y Compilación
+El contrato fue compilado exitosamente sin *warnings* críticos.
+* ![Configuración del Compilador](capturas/27-configuracion-compilador-legible.jpg)
+* ![Compilación en Remix](capturas/01-compilacion-remix.jpg)
 
-## Limitaciones y decisiones
+### 4.2 Pruebas de Despliegue (Constructor)
+Se validaron las restricciones de inicialización impuestas por los `require` en el despliegue del contrato:
+* **Rechazo por parámetro inválido (Objetivo 0):** El contrato revierte la transacción correctamente. ![Constructor Objetivo Cero](capturas/02-constructor-objetivo-cero.jpg)
+* **Rechazo por parámetro inválido (Duración 0):** ![Constructor Duración Cero](capturas/03-constructor-duracion-cero.jpg)
+* **Despliegues exitosos:** Con parámetros válidos. ![Constructor Objetivo Validado](capturas/17-constructor-objetivo-legible.jpg) | ![Constructor Duración Validada](capturas/18-constructor-duracion-legible.jpg)
 
-El contrato representa una única campaña, no es actualizable, no remunera aportaciones y no garantiza el torneo. La pérdida de la clave del organizador o de un aportante puede dejar su dinero bloqueado. Un contrato receptor que siempre rechace ETH no podrá cobrar; no hay cambio de beneficiario. No hay caducidad para solicitar el pago después del plazo. Los datos son públicos. El timestamp depende del consenso y no sirve para cronometraje deportivo preciso.
+### 4.3 Pruebas de Aportaciones
+Comprobaciones del flujo de entrada de fondos de los patrocinadores:
+* **Aportaciones exitosas (Casos estándar):** ![Aportaciones legibles](capturas/14-aportaciones-s-legibles.jpg)
+* **Aportación denegada (Fuera de plazo):** Bloqueo automático de nuevos ingresos al vencer el timestamp. ![Aportación fuera de plazo](capturas/19-aportacion-fuera-plazo-legible.jpg)
+* **Aportación denegada (Valor Cero):** No se permiten transacciones vacías. ![Aportación Cero rechazada](capturas/15-aportacion-cero-rechazada.jpg)
+* **Comportamiento en Límites de Objetivo:** Se verificó el registro al llegar al objetivo exacto ![Objetivo exacto](capturas/05-objetivo-exacto-y-limite.jpg) y al superarlo con exceso de fondos ![Exceso Objetivo](capturas/06-exceso-objetivo.jpg).
 
-ETH forzado mediante mecanismos que no llaman a `aportar()` no cuenta para la meta. Se retira únicamente `totalRecaudado`; un exceso forzado queda bloqueado, también tras devoluciones. Es una limitación consciente para evitar funciones ajenas al ejercicio. El mapping no es enumerable y no existe lista on-chain de participantes. Las pruebas son educativas y no constituyen una auditoría para usar fondos reales.
+### 4.4 Retirada de Fondos (Organizador)
+* **Control de Acceso:** La validación mediante `msg.sender` aísla la función. Solo el creador puede retirar. ![Control de Acceso](capturas/20-control-acceso-legible.jpg)
+* **Rechazo por retiro prematuro:** Intento de liquidación bloqueado si el tiempo de campaña aún está activo. ![Retirada antes de plazo](capturas/16-retirada-antes-plazo.jpg) y ![Rechazos antes de plazo](capturas/04-rechazos-antes-plazo.jpg).
+* **Rechazo por fracaso de recaudación:** Si termina el plazo y no se llegó al objetivo, el owner no puede mover los fondos. ![Retirada en fracaso rechazada](capturas/24-retirada-fracaso-rechazada.jpg).
+* **Protección de doble retiro:** Un segundo intento de retiro del owner es denegado correctamente. ![Segunda retirada rechazada](capturas/23-segunda-retirada-rechazada.jpg).
 
-## Autoría y entrega
+### 4.5 Reclamación de Devoluciones (Patrocinadores)
+Simulación de una campaña que finaliza sin lograr su meta económica:
+* **Estado de Campaña Fallida:** Queda constatado que el contrato retiene el saldo intacto. ![Campaña Fallida](capturas/07-campana-fallida-aportaciones.jpg).
+* **Devolución rechazada (Antes de plazo):** No se puede reclamar el dinero si aún hay tiempo para que la campaña sea un éxito. ![Devolución antes de plazo](capturas/26-devolucion-antes-plazo.jpg).
+* **Devolución rechazada (Campaña Exitosa):** Si el torneo se logró financiar, los reembolsos quedan bloqueados permanentemente. ![Devolución rechazada en éxito](capturas/21-devolucion-exito-rechazada.jpg).
+* **Solicitudes en carteras sin saldo:** Se bloquean transacciones desde *addresses* que no han aportado nada. ![Cuentas sin aportación](capturas/22-sin-aportacion-rechazada.jpg).
+* **Protección contra doble devolución:** Tras el reembolso exitoso, intentos adicionales del mismo usuario fallan. ![Doble devolución rechazada 1](capturas/10-devolucion-b-y-repeticion.jpg) | ![Doble devolución rechazada 2](capturas/25-segunda-devolucion-rechazada.jpg).
+* **Devoluciones exitosas:** El contrato devuelve los fondos íntegros a las carteras de los participantes. ![Devolución Final Exitosa](capturas/11-devolucion-c-final.jpg).
 
-Autor: Zayan Santos Díaz. No se atribuye un reparto de trabajo. El autor debe revisar y comprender la solución antes de presentarla.
+### 4.6 Inspección de Estados y Trazabilidad
+* **Logs y Eventos:** Correcta emisión de eventos transaccionales con `timestamps` y cantidades. ![Eventos y Timestamps](capturas/12-eventos-y-timestamps.jpg)
+* **Estados Finales de Variables:** Comprobación post-ejecución del mapeo de aportaciones y total recaudado. ![Estados Finales Legibles](capturas/13-estados-finales-legibles.jpg)
 
-Desde la raíz, `python scripts/preparar_entrega.py` genera `outputs/Ejercicio5-entrega/` y `outputs/Ejercicio5-entrega.zip`. Comprueba contenido, CRC y enlaces locales y excluye dependencias, cachés, temporales y otros ZIP. Los originales se conservan. La carpeta outputs no se incluye dentro del paquete.
-
-## Guion breve para defenderlo
-
-«El contrato custodia las aportaciones con reglas públicas. Quien despliega es el organizador y fija meta y duración. Cada aportación suma al total y al saldo de su dirección. Al acabar el plazo, el total histórico determina una sola rama: si alcanza la meta, cobra el organizador una vez; si no, cada persona pide su devolución. El tiempo no ejecuta transacciones: alguien debe llamar. Antes de enviar ETH consumimos el derecho de cobro; si falla el envío se revierte todo. Usamos inmutables, errores personalizados y devoluciones individuales para reducir costes sin complicar el ejemplo».
+*(Para la comprobación técnica de los metadatos de red, consultar los registros extraídos en `evidencias/remix-transacciones.json` y `evidencias/remix-estados-finales.json`)*.
