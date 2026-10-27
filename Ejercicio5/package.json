@@ -1,0 +1,7 @@
+{
+  "name": "financiacion-torneo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "compile": "node scripts/compile.cjs", "test": "node --test --test-concurrency=1 test/torneo.test.cjs" },
+  "devDependencies": { "ethers": "6.15.0", "ganache": "7.9.2", "solc": "0.8.30" }
+}
